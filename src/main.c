@@ -41,6 +41,8 @@ int urecv(int);
 void *udial(void *);
 void *ukplv(void *);
 void *ulisten(void *);
+void *ulogout(void *);
+void sigproc (int);
 
 int main(int argc,char *argv[])
 {
@@ -170,9 +172,8 @@ int main(int argc,char *argv[])
     case 'D':
     case 'L':
         sock=init_socket(&info);
-
-
-
+        signal(SIGTERM,sigproc);
+        signal(SIGINT,sigproc);
 #ifdef __linux__
         if(pthread_create(&thread[0], NULL, ulisten, NULL) != 0)
             error("pthread_create");
@@ -195,9 +196,6 @@ int main(int argc,char *argv[])
         }
 #endif // __linux__
 
-
-
-
         exit(errno);
     case 'h':
     case 'H':
@@ -206,6 +204,27 @@ int main(int argc,char *argv[])
     }
 
     return 0;
+}
+
+void sigproc (int cause)
+{
+    if(cause==SIGINT)
+        fprintf(stderr,"keyboard int\n");
+    if(state.loggedin)
+    {
+        if(pthread_create(&thread[1], NULL, ulogout, NULL) != 0)
+            error("pthread_create");
+    }
+
+
+#ifdef _WIN32
+        WSACleanup();
+#endif // _WIN32
+    bftime=time(NULL);
+    while((bftime>time(NULL)-WAIT_TIME)&&(state.loggedin));
+    state.exiting=true;
+    close(sock);
+    exit(cause);
 }
 
 int init_socket(struct dobeinfo *info)
@@ -224,7 +243,7 @@ int init_socket(struct dobeinfo *info)
     state.localaddr.sin_port=htons(DOBE_CLI_PORT);
     state.serveraddr.sin_port=htons(DOBE_SVR_PORT);
     if(state.localaddr.sin_addr.s_addr==0)
-        inet_aton("127.0.0.1",&state.localaddr.sin_addr);
+        state.localaddr.sin_addr.s_addr=htonl(0x7F000001);
     if(state.serveraddr.sin_addr.s_addr==0)
         inet_aton(D_SVR_IP,&state.serveraddr.sin_addr);
     if(bind(sock,(struct sockaddr *)&(state.localaddr),sizeof(struct sockaddr_in))<0)
@@ -233,10 +252,35 @@ int init_socket(struct dobeinfo *info)
     return sock;
 }
 
+void *ulogout(void * ptr)
+{
+    while((!state.salt_got)&&(state.challegecount<MAX_CHA_TRY))
+    {
+        i=usend(sock,T_CHAPKT);
+        bftime=time(NULL);
+        if(state.verbose)
+            printf("%d bytes sent\n",i);
+        while((bftime>time(NULL)-WAIT_TIME)&&(!state.salt_got));
+        if(state.salt_got)
+            break;
+    }
+    if(state.challegecount>=MAX_CHA_TRY)
+    {
+        fprintf(stderr,"cha fail\n");
+        exit(-1);
+    }
+    if(state.salt_got)
+    {
+        i=usend(sock,T_LGOPKT);
+    if(state.verbose);
+        printf("logout sent\n");
+    }
+    pthread_exit(NULL);
+}
+
 void *ulisten(void * ptr)
 {
-    int16_t i;
-    while(true)
+    while(!state.exiting)
         if((i=urecv(sock))>0)
         {
             if(state.verbose)
@@ -244,7 +288,7 @@ void *ulisten(void * ptr)
         }
         else
             fprintf(stderr,"error receiving\n");
-
+    pthread_exit(NULL);
 }
 
 void *udial(void * ptr)
@@ -385,15 +429,20 @@ int urecv(int socket)
             fprintf(stderr,"Invaild cha respond pkt lngth! should be %ld!\n",sizeof(struct dobechrpkt));
         break;
     case T_SUCPKT:
-        if(i==sizeof(struct dobesucpkt))
+        if(i==DOBELGISUC_LENGTH)
         {
             struct dobesucpkt *sucptr=buf;
             memcpy(state.auth,sucptr->auth,16);
             //get info from ptr
             state.loggedin=true;
         }
+        else if(i==DOBELGOSUC_LENGTH)
+        {
+            printf("logged out\n");
+            state.loggedin=false;
+        }
         else
-            fprintf(stderr,"Invaild lgi sucess pkt lngth! shoud be %ld!\n",sizeof(struct dobesucpkt));
+            fprintf(stderr,"Invaild sucess pkt lngth %d!\n",i);
         break;
     case T_FALPKT:
         fprintf(stderr,"login fail pkt");
@@ -416,6 +465,7 @@ int urecv(int socket)
         break;
     case T_MSGPKT:
         //todo :show
+        printf("msgpkt:\n");
         break;
     case T_MSCPKT:
         switch(ntohs(((struct dobemscpkt *)buf)->type))

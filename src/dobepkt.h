@@ -21,6 +21,8 @@ by dixyes (dixyes@gmail.com)
 #define T_FALPKT 0x05
 
 #define DOBEMISC_LENGTH 40
+#define DOBELGISUC_LENGTH 45
+#define DOBELGOSUC_LENGTH 25
 
 #define MTS_ROK 0x1000
 #define MTS_FILE 0x1001
@@ -104,10 +106,13 @@ struct dobekalpkt
 struct dobelgopkt//incomplate
 {
     uint8_t head;
+    uint8_t type[2];
+    uint8_t usr_lth;
     uint8_t md5a[16];
-    uint8_t zeros[3];
+    uint8_t username[36];
+    uint8_t fixed[2];
+    uint8_t md5x[6];
     uint8_t auth[16];
-    uint16_t time;
 };
 struct dobemsgpkt//incomplate
 {

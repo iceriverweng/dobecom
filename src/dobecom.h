@@ -56,6 +56,7 @@ struct workstate
     uint8_t ukn2[4];
     uint8_t mcstate;
     uint16_t time;
+    bool exiting;
     bool miscsuc;
     bool loggedin;
     bool kalsuc;

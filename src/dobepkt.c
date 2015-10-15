@@ -135,6 +135,19 @@ void *loginpkt(void)
 void *logoutpkt(void)
 {
     struct dobelgopkt *buf=malloc(sizeof(struct dobelgopkt));
+    uint64_t * int64ptr;
+
+    buf->head=0x06;
+    memcpy(buf->type,"\x01\x00",2);
+    buf->usr_lth=strlen(info.username)+20;
+    memcpy(buf->md5a,state.md5a,16);
+    memcpy(buf->username,info.username,strlen(info.username)*sizeof(char));
+    memcpy(buf->fixed,"\x20\x04",2);
+    memcpy(buf->md5x,buf->md5a,6);
+    int64ptr=(uint64_t *)&buf->auth-1;
+    *int64ptr^=htonll(info.mac&0x0000FFFFFFFFFFFF);
+    memcpy(buf->auth,state.auth,16);
+
     return buf;
 }
 void *heartpkt(void)
@@ -142,7 +155,7 @@ void *heartpkt(void)
     struct dobekalpkt *buf=malloc(sizeof(struct dobekalpkt));
 
     buf->head=0xff;
-    memcpy(buf->md5a,state.md5a,16);//make hasha into pkt
+    memcpy(buf->md5a,state.md5a,16);
     memcpy(buf->auth,state.auth,16);
     buf->time=state.time;
 

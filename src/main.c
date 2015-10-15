@@ -426,7 +426,7 @@ int urecv(int socket)
 #endif // _DEBUG
         }
         else
-            fprintf(stderr,"Invaild cha respond pkt lngth! should be %ld!\n",sizeof(struct dobechrpkt));
+            fprintf(stderr,"Invaild cha respond pkt lngth!\n");
         break;
     case T_SUCPKT:
         if(i==DOBELGISUC_LENGTH)

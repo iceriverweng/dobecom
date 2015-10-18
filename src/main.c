@@ -34,6 +34,9 @@ int sock;
 int16_t i;
 pthread_t thread[2];
 
+struct dobeinfo info;
+struct workstate state;
+
 int init_socket(struct dobeinfo *);
 void usage(void);
 unsigned int usend(int,uint16_t);
@@ -166,6 +169,7 @@ int main(int argc,char *argv[])
         usage();
         exit(opterr);
     }
+    
 
     switch(state.mode)
     {
@@ -174,7 +178,7 @@ int main(int argc,char *argv[])
         sock=init_socket(&info);
         signal(SIGTERM,sigproc);
         signal(SIGINT,sigproc);
-#ifdef __linux__
+#if defined(__linux__) || defined (__MACH__)
         if(pthread_create(&thread[0], NULL, ulisten, NULL) != 0)
             error("pthread_create");
         while(true)
@@ -196,7 +200,6 @@ int main(int argc,char *argv[])
         }
 #endif // __linux__
 
-        exit(errno);
     case 'h':
     case 'H':
         usage();
@@ -243,7 +246,7 @@ int init_socket(struct dobeinfo *info)
     state.localaddr.sin_port=htons(DOBE_CLI_PORT);
     state.serveraddr.sin_port=htons(DOBE_SVR_PORT);
     if(state.localaddr.sin_addr.s_addr==0)
-        state.localaddr.sin_addr.s_addr=htonl(0x7F000001);
+        state.localaddr.sin_addr.s_addr=htonl(INADDR_ANY);
     if(state.serveraddr.sin_addr.s_addr==0)
         inet_aton(D_SVR_IP,&state.serveraddr.sin_addr);
     if(bind(sock,(struct sockaddr *)&(state.localaddr),sizeof(struct sockaddr_in))<0)
@@ -272,7 +275,7 @@ void *ulogout(void * ptr)
     if(state.salt_got)
     {
         i=usend(sock,T_LGOPKT);
-    if(state.verbose);
+    if(state.verbose)
         printf("logout sent\n");
     }
     pthread_exit(NULL);

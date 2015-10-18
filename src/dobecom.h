@@ -12,7 +12,7 @@ by dixyes (dixyes@gmail.com)
 #define MAX_USRNM 36
 #define MAX_PWD 64
 #define MAX_CHA_TRY 10
-#define MAX_RECV_PKT 1024
+#define MAX_RECV_PKT 512
 
 #define D_DOBEVERSIION "8089D"//CUST uses none
 #define D_SSTRING "a4e112f92be60a607d249a962dc79ce96f74ee64"//CUST String
@@ -41,7 +41,7 @@ struct dobeinfo
     uint8_t sdnsip[4];
     char dobever[16];
     char sstring[40];
-}info;
+};
 
 struct workstate
 {
@@ -65,6 +65,6 @@ struct workstate
     bool broadcast;
     struct sockaddr_in localaddr;
     struct sockaddr_in serveraddr;
-}state;
+};
 
-#endif // _DOBE_CONST
+#endif // _DOBE_STRUCT

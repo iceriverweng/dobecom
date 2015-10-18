@@ -13,19 +13,17 @@ by dixyes (dixyes@gmail.com)
 #ifdef __linux__
 #include <sys/utsname.h>
 #endif
-#ifdef _DEBUG
-#include <stdio.h>
-#endif // _DEBUG
+#ifdef __MACH__
+#include <sys/utsname.h>
+#endif
 
 #include "dobecom.h"
 #include "dobepkt.h"
 #include "md5.h"
 #include "utils.h"
 
-#define HASH_TEMP_SIZE 128;
-
-struct workstate state;
-struct dobeinfo info;
+extern struct dobeinfo info;
+extern struct workstate state;
 
 void *challegepkt(void)
 {
@@ -53,7 +51,7 @@ void *loginpkt(void)
     memcpy(tmp_buf,"\x03\x01",2*sizeof(char));
     memcpy(tmp_buf+2,state.salt,4*sizeof(char));
     memcpy(tmp_buf+5,info.password,strlen(info.password)*sizeof(char));
-    MD5(tmp_buf,6+strlen(info.password),buf->md5a);//make hasha into lgi pkt 20
+    MD5(tmp_buf,6+(int)strlen(info.password),buf->md5a);//make hasha into lgi pkt 20
     memcpy(state.md5a,buf->md5a,16);
     memcpy(buf->username,info.username,strlen(info.username)*sizeof(char));   //56
     memcpy(buf->fixed1,"\x20\x04",2);    //2004,unknown 58
@@ -65,7 +63,7 @@ void *loginpkt(void)
     memcpy(tmp_buf+1,info.password,strlen(info.password)*sizeof(char));
     memcpy(tmp_buf+1+strlen(info.password),state.salt,4*sizeof(char));
     memset(tmp_buf+5+strlen(info.password),0,4*sizeof(char));
-    MD5(tmp_buf,9+strlen(info.password),buf->md5b);//make hashb into lgi pkt 80
+    MD5(tmp_buf,9+(int)strlen(info.password),buf->md5b);//make hashb into lgi pkt 80
     buf->ipcount=info.lcount;  //local ip count 81
     memcpy(buf->localips,info.localips,16);//localip 97
     memcpy(buf->md5c,"\x14\x00\x07\x0b",4);
@@ -90,7 +88,11 @@ void *loginpkt(void)
 #else
     struct utsname una;
     char * token;
+#ifndef __MACH__
     uint32_t * tmp=calloc(4,sizeof(uint8_t));
+#else
+    long int * tmp=calloc(4,sizeof(uint8_t));
+#endif
         if(uname((struct utsname *)&una)!=0)
             memcpy(buf->os_major,"\x06\0\0\0\x06\0\0\0\0\0\x01\0\x02",13);
         else

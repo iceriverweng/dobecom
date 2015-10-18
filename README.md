@@ -1,6 +1,7 @@
 # dobecom
 
- yet a linux command-line Dr.com client for CUST
+ yet a command-line Dr.com client for CUST
+ 
  COPYLEFT(only parts by myself) !
 ### acknowledgement
  protocol detail refer to [drcom-generic](https://github.com/drcoms/drcom-generic) by latyas.

@@ -29,6 +29,10 @@ by dixyes (dixyes@gmail.com)
 #define _DOBE_STRUCT
 
 #include <stdbool.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#include <Ws2tcpip.h>
+#endif
 struct dobeinfo
 {
     char username[MAX_USRNM];

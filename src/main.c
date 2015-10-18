@@ -3,26 +3,33 @@ main.c-dobecom main
 by dixyes (dixyes@gmail.com)
 progress socket and other things
 */
+#ifdef _MSC_VER
+#error "If you can make functions like getopt ,you can use VS"
+#endif
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <pthread.h>
 #include <signal.h>
+#include <unistd.h>
+#include <time.h>
 
 #ifdef _WIN32
 #include <winsock2.h>
+#include <windows.h>
 #include <Ws2tcpip.h>
-#else
+#endif
+
+#if defined(__linux__) || defined(__MACH__)
+#include <pthread.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <sys/utsname.h> //linux only
-#endif // _WIN32
+#include <sys/utsname.h>
+#endif
 
 #include "version.h"
 #include "dobepkt.h"
@@ -32,7 +39,13 @@ progress socket and other things
 time_t bftime;
 int sock;
 int16_t i;
+#if defined(__linux__) || defined(__MACH__)
 pthread_t thread[2];
+#endif
+#ifdef _WIN32
+HANDLE handle;
+#endif // _WIN32
+
 
 struct dobeinfo info;
 struct workstate state;
@@ -41,11 +54,18 @@ int init_socket(struct dobeinfo *);
 void usage(void);
 unsigned int usend(int,uint16_t);
 int urecv(int);
+void sigproc (int);
+
 void *udial(void *);
 void *ukplv(void *);
-void *ulisten(void *);
+#if defined(__linux__) || defined(__MACH__)
 void *ulogout(void *);
-void sigproc (int);
+void *ulisten(void *);
+#endif // defined
+#ifdef _WIN32
+unsigned int __stdcall ulisten(void *);
+unsigned int __stdcall ulogout(void *);
+#endif // _WIN32
 
 int main(int argc,char *argv[])
 {
@@ -62,7 +82,7 @@ int main(int argc,char *argv[])
     memset((char *)&state, 0, sizeof(state));
 
 
-    printf("Dobecom - redesigned dogecom for complex envir0nment build %ld\n",BUILDS_COUNT);
+    printf("Dobecom - redesigned dogecom for complex envir0nment build %d\n",BUILDS_COUNT);
 
 //arguscan:
     opterr = 0;
@@ -90,14 +110,14 @@ int main(int argc,char *argv[])
             }
             break;
         case 's':
-            if(inet_aton(optarg,&state.serveraddr.sin_addr)==0)
+            if((state.serveraddr.sin_addr.s_addr=inet_addr(optarg))==0)
             {
                 fprintf(stderr,"Wrong server IP\n");
                 exit(EINVAL);
             }
             break;
         case 'i':
-            if(inet_aton(optarg,&state.localaddr.sin_addr)==0)
+            if((state.localaddr.sin_addr.s_addr=inet_addr(optarg))==0)
             {
                 fprintf(stderr,"Wrong local binding IP\n");
                 exit(EINVAL);
@@ -106,7 +126,7 @@ int main(int argc,char *argv[])
         case 'l':
             if(info.lcount<4)
             {
-                if(inet_aton(optarg,&tmpaddr.sin_addr)==0)
+                if((tmpaddr.sin_addr.s_addr=inet_addr(optarg))==0)
                 {
                     fprintf(stderr,"Wrong local dialing IP %s\n",optarg);
                     exit(EINVAL);
@@ -117,21 +137,21 @@ int main(int argc,char *argv[])
                 fprintf(stderr,"Extra local dialing IP %s ,ignore it.\n",optarg);
             break;
         case 'N':
-            if(inet_aton(optarg,&tmpaddr.sin_addr)==0)
+            if((tmpaddr.sin_addr.s_addr=inet_addr(optarg))==0)
             {
                 fprintf(stderr,"Wrong pri DNS IP %s\n",optarg);
             }
             memcpy(info.pdnsip,&tmpaddr.sin_addr.s_addr,4);
             break;
         case 'd':
-            if(inet_aton(optarg,&tmpaddr.sin_addr)==0)
+            if((tmpaddr.sin_addr.s_addr=inet_addr(optarg))==0)
             {
                 fprintf(stderr,"Wrong DHCP server IP %s\n",optarg);
             }
             memcpy(info.dhcpip,&tmpaddr.sin_addr.s_addr,4);
             break;
         case 'n':
-            if(inet_aton(optarg,&tmpaddr.sin_addr)==0)
+            if((tmpaddr.sin_addr.s_addr=inet_addr(optarg))==0)
             {
                 fprintf(stderr,"Wrong secondary DNS IP %s\n",optarg);
             }
@@ -169,7 +189,7 @@ int main(int argc,char *argv[])
         usage();
         exit(opterr);
     }
-    
+
 
     switch(state.mode)
     {
@@ -190,6 +210,11 @@ int main(int argc,char *argv[])
             pthread_join(thread[1],NULL);
             printf("dial done\n");
         }
+        if(state.mode=='L'&&state.loggedin)
+        {
+            ulogout(NULL);
+            exit(0);
+        }
         if(pthread_create(&thread[1], NULL, ukplv, NULL) != 0)
             error("pthread_create");
         if(thread[1] !=0)
@@ -199,6 +224,18 @@ int main(int argc,char *argv[])
         }
         }
 #endif // __linux__
+#ifdef _WIN32
+        if(_beginthreadex(NULL, 2048, ulisten,NULL,0, NULL)==0)
+            error("thread create");
+        while(true)
+        {
+        udial(NULL);
+        if(state.loggedin)
+            printf("dial done\n");
+        if(ukplv(NULL)==NULL)
+            printf("kplv timeout,redial\n");
+        }
+#endif // _WIN32
 
     case 'h':
     case 'H':
@@ -215,8 +252,14 @@ void sigproc (int cause)
         fprintf(stderr,"keyboard int\n");
     if(state.loggedin)
     {
+#if defined(__linux__) || defined(__MACH__)
         if(pthread_create(&thread[1], NULL, ulogout, NULL) != 0)
             error("pthread_create");
+#endif
+#ifdef _WIN32
+        if(_beginthreadex(NULL,2048, ulogout,NULL,0, NULL) == 0)
+            error("pthread_create");
+#endif // _WIN32
     }
 
 
@@ -248,14 +291,18 @@ int init_socket(struct dobeinfo *info)
     if(state.localaddr.sin_addr.s_addr==0)
         state.localaddr.sin_addr.s_addr=htonl(INADDR_ANY);
     if(state.serveraddr.sin_addr.s_addr==0)
-        inet_aton(D_SVR_IP,&state.serveraddr.sin_addr);
+        state.serveraddr.sin_addr.s_addr=inet_addr(D_SVR_IP);
     if(bind(sock,(struct sockaddr *)&(state.localaddr),sizeof(struct sockaddr_in))<0)
         error("binding");
 
     return sock;
 }
-
-void *ulogout(void * ptr)
+#if defined(__linux__) || defined(__MACH__)
+void *logout(void * ptr)
+#endif // defined
+#ifdef _WIN32
+unsigned int __stdcall ulogout(PVOID pM)
+#endif // _WIN32
 {
     while((!state.salt_got)&&(state.challegecount<MAX_CHA_TRY))
     {
@@ -278,10 +325,20 @@ void *ulogout(void * ptr)
     if(state.verbose)
         printf("logout sent\n");
     }
+#if defined(__linux__) || defined(__MACH__)
     pthread_exit(NULL);
+    return NULL;
+#endif
+#ifdef _WIN32
+    return 0;
+#endif // _WIN32
 }
-
+#if defined(__linux__) || defined(__MACH__)
 void *ulisten(void * ptr)
+#endif // defined
+#ifdef _WIN32
+unsigned int __stdcall ulisten(PVOID pM)
+#endif // _WIN32
 {
     while(!state.exiting)
         if((i=urecv(sock))>0)
@@ -291,7 +348,13 @@ void *ulisten(void * ptr)
         }
         else
             fprintf(stderr,"error receiving\n");
+#if defined(__linux__) || defined(__MACH__)
     pthread_exit(NULL);
+    return NULL;
+#endif
+#ifdef _WIN32
+    return 0;
+#endif // _WIN32
 }
 
 void *udial(void * ptr)
@@ -325,7 +388,10 @@ void *udial(void * ptr)
             exit(-1);
         }
     }
+#if defined(__linux__) || defined(__MACH__)
     pthread_exit(NULL);
+#endif
+    return NULL;
 }
 void *ukplv(void * ptr)
 {
@@ -354,19 +420,28 @@ void *ukplv(void * ptr)
                 if(state.mcstate<4)
                 {
                     state.loggedin=false;
+#if defined(__linux__) || defined(__MACH__)
                     pthread_exit(NULL);
+#endif // defined
+                    return NULL;
                 }
                 printf("misc exchange sucess\n");
             }
             else
             {
                 state.loggedin=false;
+#if defined(__linux__) || defined(__MACH__)
                 pthread_exit(NULL);
+#endif // defined
+                return NULL;
             }
 
             sleep(20);
         }
+#if defined(__linux__) || defined(__MACH__)
     pthread_exit(NULL);
+#endif
+    return NULL;
 }
 
 unsigned int usend(int socket,uint16_t pkttype)
@@ -414,7 +489,7 @@ int urecv(int socket)
 {
     void *buf=malloc(MAX_RECV_PKT);
     int16_t i=0;
-    i=recvfrom(socket, (unsigned char*)buf,MAX_RECV_PKT, 0, NULL, NULL);
+    i=recvfrom(socket, (char*)buf,MAX_RECV_PKT, 0, NULL, NULL);
     switch (*(unsigned char *)buf)
     {
     case T_CHRPKT:
@@ -448,7 +523,7 @@ int urecv(int socket)
             fprintf(stderr,"Invaild sucess pkt lngth %d!\n",i);
         break;
     case T_FALPKT:
-        fprintf(stderr,"login fail pkt");
+        fprintf(stderr,"login fail");
         state.loggedin=false;
         switch(*(uint8_t*)(buf+4))
         {
@@ -465,6 +540,7 @@ int urecv(int socket)
             fprintf(stderr," - unknown 0x%02X\n",*(uint8_t*)(buf+4));
             break;
         }
+        exit(-1);
         break;
     case T_MSGPKT:
         //todo :show

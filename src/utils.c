@@ -12,6 +12,7 @@ by dixyes (dixyes@gmail.com)
 
 
 #ifdef _WIN32
+#include <time.h>
 void sleep(unsigned int seconds)
 {
     clock_t goal = seconds*1000 + clock();

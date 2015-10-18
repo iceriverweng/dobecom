@@ -7,16 +7,17 @@ by dixyes (dixyes@gmail.com)
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
-#include <netinet/in.h>
 #include <time.h>
-#include <unistd.h>
-#ifdef __linux__
-#include <sys/utsname.h>
-#endif
-#ifdef __MACH__
-#include <sys/utsname.h>
-#endif
 
+
+#if defined(__linux__) || defined(__MACH__)
+#include <sys/utsname.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#endif
+#ifdef _WIN32
+//#include "stdafx.h"
+#endif
 #include "dobecom.h"
 #include "dobepkt.h"
 #include "md5.h"
